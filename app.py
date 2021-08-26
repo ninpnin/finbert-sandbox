@@ -21,16 +21,16 @@ def read_data(filepath, head=1000):
     df = df[df["sender"] != "Alko"]
     df = df[df["sender"] != "OngoPongo"]
 
-    df = df.head(head)
-    return df
+    return df.head(head)
 
 def train_test_datasets(df):
+    # Build vocabulary
     senders = sorted(list(set(df["sender"])))
     label_vocab = bidict({sender: ix for ix, sender in enumerate(senders)})
     df["id"] = df["sender"].apply(lambda x: label_vocab[x])
+
+    # Split into train, validation and test sets
     df["split"] = np.random.choice(["train", "test", "valid"], len(df), p=[0.7, 0.15, 0.15])
-    
-    print(df)
     train_df = df[df["split"] == "train"]
     train_texts = list(train_df["text"])
     train_labels = list(train_df["id"])
@@ -49,7 +49,7 @@ def train_test_datasets(df):
     return train, valid, test, label_vocab
 
 print("Read data in ...")
-data = read_data('data/rr.csv')
+data = read_data('data/rr.csv', head=5000)
 train, valid, test, label_vocab = train_test_datasets(data)
 print(train[0][:10])
 print(train[1][:10])
@@ -87,15 +87,16 @@ print("Start training...")
 from transformers import TFDistilBertForSequenceClassification, TFTrainer, TFTrainingArguments
 
 training_args = TFTrainingArguments(
-    output_dir='./results',          # output directory
-    num_train_epochs=3,              # total number of training epochs
-    per_device_train_batch_size=16,  # batch size per device during training
-    per_device_eval_batch_size=64,   # batch size for evaluation
-    warmup_steps=500,                # number of warmup steps for learning rate scheduler
-    weight_decay=0.01,               # strength of weight decay
-    logging_dir='./logs',            # directory for storing logs
+    output_dir='./results',
+    num_train_epochs=3,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=64,
+    warmup_steps=500,
+    weight_decay=0.01,
+    logging_dir='./logs',
     logging_steps=10,
-    evaluation_strategy="epoch"
+    evaluation_strategy="steps",
+    eval_steps=30,
 )
 
 with training_args.strategy.scope():
@@ -104,10 +105,10 @@ with training_args.strategy.scope():
         output_attentions=False, output_hidden_states=False)
 
 trainer = TFTrainer(
-    model=model,                         # the instantiated 🤗 Transformers model to be trained
-    args=training_args,                  # training arguments, defined above
-    train_dataset=train_dataset,         # training dataset
-    eval_dataset=valid_dataset             # evaluation dataset
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=valid_dataset
 )
 
 trainer.train()
